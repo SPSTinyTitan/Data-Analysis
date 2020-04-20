@@ -28,6 +28,10 @@ namespace vector{
         AddVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
         return C;
     }
+    __host__ void AddVecfh(float* A, float* B, float* C, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        AddVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+    }
 
     //Element wise subtraction of vector. 
     __global__ void SubVecf(float* A, float* B, float* C, int N){
@@ -41,6 +45,10 @@ namespace vector{
         int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
         SubVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
         return C;
+    }
+    __host__ void SubVecfh(float* A, float* B, float* C, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        SubVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
     }
 
     //Element wise multiplication of vectors. For dot products see DotVec().
@@ -62,6 +70,10 @@ namespace vector{
         cudaFree(C);
         return result;
     }
+    __host__ void MultVecfh(float* A, float* B, float* C, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        MultVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+    }
 
     __global__ void ScaleVecf(float* A, float B, float* C, int N){
         int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -74,6 +86,10 @@ namespace vector{
         int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
         ScaleVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
         return C;
+    }
+    __host__ void ScaleVecfh(float* A, float B, float* C, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        ScaleVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
     }
 
     //Sum of elements in vector.
