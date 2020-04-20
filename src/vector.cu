@@ -29,6 +29,20 @@ namespace vector{
         return C;
     }
 
+    //Element wise subtraction of vector. 
+    __global__ void SubVecf(float* A, float* B, float* C, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            C[i] = A[i] - B[i];
+    }
+    __host__ float* SubVecf(float* A, float* B, int N){
+        float* C;
+        cudaMalloc(&C, N*sizeof(float));
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        SubVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+        return C;
+    }
+
     //Element wise multiplication of vectors. For dot products see DotVec().
     __global__ void MultVecf(float* A, float* B, float* C, int N){
         int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -47,6 +61,19 @@ namespace vector{
         float result = SumVecf(C, N);
         cudaFree(C);
         return result;
+    }
+
+    __global__ void ScaleVecf(float* A, float B, float* C, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            C[i] = A[i] * B;
+    }
+    __host__ float* ScaleVecf(float* A, float B, int N){
+        float* C;
+        cudaMalloc(&C, N*sizeof(float));
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        ScaleVecf<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+        return C;
     }
 
     //Sum of elements in vector.
