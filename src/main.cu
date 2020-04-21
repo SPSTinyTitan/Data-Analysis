@@ -12,9 +12,8 @@
 //https://docs.nvidia.com/cuda/cusolver/index.html
 
 #include <cstdio>
-#include "cublas_v2.h"
 #include <cuda_runtime.h>
-#include "cusolverDn.h"
+#include <cusolverDn.h>
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true){
     if (code != cudaSuccess) {
@@ -80,6 +79,7 @@ __host__ float* Jacobian(float* f(float* param, int N), float* param, int N, int
 
 //Same as Jacboian() but uses adaptive values of epsilon scaled with the value of param.
 //This can achieve better precisions across a wider range of values.
+//TODO: Consider logarithms then addition instead of multiplications. Reduces arithmetic error.
 __host__ float* Jacobian2(float* f(float* param, int N), float* param, int N, int K){
     const float eps = pow(2,-10);
     float* J;
@@ -94,9 +94,9 @@ __host__ float* Jacobian2(float* f(float* param, int N), float* param, int N, in
         dB = param[i] * eps;
         if (dB < 1e-35 && dB > -1e-35)
             dB = 1e-30;
-        scale = 1./dB;
+        //dB^-1. Recalculation for precision. 
+        scale = (float) (1./((double)param[i] * eps));
         param[i] += dB;
-        std::cout << dB <<  "  " << scale << "  " << param[i] << '\n';
         next = f(param, N);
         SubVecfh(next, prev, (float*)&J[i * N], N);
         ScaleVecfh((float*)&J[i * N], scale, (float*)&J[i * N], N);
@@ -108,28 +108,68 @@ __host__ float* Jacobian2(float* f(float* param, int N), float* param, int N, in
     return J;
 }
 
-__host__ void SVD(float* A, int M, int N, float* S, float* U, float* VT){  
+__host__ void SVD(float* A, int M, int N, float* S, float* U, float* VT){ 
+    
+    float* debug = (float*)malloc(M * N * sizeof(float));
+    cudaMemcpy(debug, A, M * N * sizeof(float), cudaMemcpyDeviceToHost);
+    for (int i = 0; i < M; i++){
+        for (int j = 0; j < N; j++){
+            std::cout << std::left << std::setw(15) << debug[i + j * M];
+        }
+        std::cout << '\n';
+    }
+    
     cusolverDnHandle_t handle;
     cusolverStatus_t stat = cusolverDnCreate(&handle);
     if (stat != CUSOLVER_STATUS_SUCCESS) {
-        printf ("CUBLAS initialization failed\n");
+        printf ("CUSOLVER initialization failed\n");
         exit(EXIT_FAILURE);
     }
 
-    float* work;
+    int* devInfo; gpuErrchk(cudaMalloc(&devInfo, sizeof(int))); 
     int lwork;
-    int* devInfo;
 
-    cusolverDnSgesvd_bufferSize(
+    stat = cusolverDnSgesvd_bufferSize(
         handle,
         M,
         N,
         &lwork);
+    if (stat != CUSOLVER_STATUS_SUCCESS) {
+        printf ("SVD buffer failed\n");
+        exit(EXIT_FAILURE);
+    }
 
-    gpuErrchk(cudaMalloc(&work, lwork * sizeof(float)));
-    gpuErrchk(cudaMalloc((void**)&devInfo,sizeof(int))); 
 
-    cusolverDnSgesvd(
+    float* work; gpuErrchk(cudaMalloc(&work, lwork * sizeof(float)));
+
+    stat = cusolverDnSgesvd(
+        handle,
+        'N',
+        'N',
+        M,
+        N,
+        A,
+        M,
+        S,
+        NULL,
+        M,
+        NULL,
+        N,
+        work,
+        lwork,
+        NULL,
+        devInfo);
+    
+    if (stat != CUSOLVER_STATUS_SUCCESS) {
+        printf ("S Solve failed\n");
+        int* dev = (int*)malloc(sizeof(int));
+        cudaMemcpy(dev, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        printf ("Code: %d, Devinfo: %d \n", (int)stat, *dev);
+        printf ("M:%d N:%d lda:%d ldu:%d ldvt:%d", M, N, M, M, N);
+        exit(EXIT_FAILURE);
+    }
+
+    stat = cusolverDnSgesvd(
         handle,
         'A',
         'A',
@@ -146,9 +186,21 @@ __host__ void SVD(float* A, int M, int N, float* S, float* U, float* VT){
         lwork,
         NULL,
         devInfo);
-    
+
+    if (stat != CUSOLVER_STATUS_SUCCESS) {
+        printf ("SVD Solve failed\n");
+        int* dev = (int*)malloc(sizeof(int));
+        cudaMemcpy(dev, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+        printf ("Code: %d, Devinfo: %d \n", (int)stat, *dev);
+        printf ("M:%d N:%d lda:%d ldu:%d ldvt:%d", M, N, M, M, N);
+        exit(EXIT_FAILURE);
+    }
+
+
     cudaFree(work);
     cudaFree(devInfo);
+    printf ("%d", (int)CUSOLVER_STATUS_INVALID_VALUE);
+
 }
 
 //Gauss-Newton method
@@ -225,16 +277,84 @@ int main(){
     //float* d_result = vector::DoubleExp(param, N);
     cudaMemcpy(result, d_result, size * 5, cudaMemcpyDeviceToHost);
 
-    for (int i = 0; i < N; i++){
-        std::cout << std::left 
-            << std::setw(15) << i
-            << std::setw(15) << result[i]
-            << std::setw(15) << result[i+N]
-            << std::setw(15) << result[i+2*N]
-            << std::setw(15) << result[i+3*N]
-            << std::setw(15) << result[i+4*N]
-            << '\n';
+    // for (int i = 0; i < N; i++){
+    //     std::cout << std::left 
+    //         << std::setw(15) << i
+    //         << std::setw(15) << result[i]
+    //         << std::setw(15) << result[i+N]
+    //         << std::setw(15) << result[i+2*N]
+    //         << std::setw(15) << result[i+3*N]
+    //         << std::setw(15) << result[i+4*N]
+    //         << '\n';
+    // }
+
+    int M = 3;
+    N = 5;
+    //float* J = d_result;
+    //float A[15] = {1,1,1,0,0,1,0,0,1,1,1,0,1,0,1};
+    float A[15] = {1,1,1,1,0,0,1,0,1,0,1,0,0,1,1};
+    float* J;
+    gpuErrchk(cudaMalloc(&J, M * N * sizeof(float)));
+    cudaMemcpy(J, &A, M * N * sizeof(float), cudaMemcpyHostToDevice);
+
+    float* S, *U, *VT;
+    int P = M;
+    if (M > N)
+        P = N;
+
+
+    float* Sh = (float*)malloc(P * sizeof(float));
+    float* Uh = (float*)malloc(M * M * sizeof(float));
+    float* VTh = (float*)malloc(N * N * sizeof(float));
+    gpuErrchk(cudaMalloc(&S, P * P * sizeof(float)));
+    gpuErrchk(cudaMalloc(&U, M * M * sizeof(float)));
+    gpuErrchk(cudaMalloc(&VT, N * N * sizeof(float)));
+
+    vector::SVD(J, M, N, S, U, VT);
+    
+    cudaMemcpy(Sh, S, P * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(Uh, U, M * M * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(VTh, VT, N * N * sizeof(float), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < M; i++){
+        for (int j = 0; j < M; j++){
+            std::cout << std::left << std::setw(15) << Uh[i + j * M];
+        }
+        std::cout << '\n';
     }
+    for (int i = 0; i < N; i++){
+        for (int j = 0; j < N; j++){
+            std::cout << std::left << std::setw(15) << VTh[i + j * N];
+        }
+        std::cout << '\n';
+    }
+
+    // int K = 5;
+    // float* J = d_result;
+    // float* S, *U, *VT;
+    // int P = N;
+    // if (N > K)
+    //     P = K;
+
+    // gpuErrchk(cudaMalloc(&S, P * P * sizeof(float)));
+    // gpuErrchk(cudaMalloc(&U, N * N * sizeof(float)));
+    // gpuErrchk(cudaMalloc(&VT, K * K * sizeof(float)));
+    // vector::SVD(J, N, K, S, U, VT);
+
+    // float* Sh = (float*)malloc(size);
+    // float* Uh = (float*)malloc(size * K);
+    // float* VTh = (float*)malloc(size * K);
+    // cudaMemcpy(Sh, S, size, cudaMemcpyDeviceToHost);
+    // cudaMemcpy(Uh, U, size * K, cudaMemcpyDeviceToHost);
+    // cudaMemcpy(VTh, VT, size * K, cudaMemcpyDeviceToHost);
+
+    // for (int i = 0; i < N; i++){
+    //     std::cout << std::left 
+    //         << std::setw(15) << Sh[i]
+    //         << std::setw(15) << Uh[i]
+    //         << std::setw(15) << VTh[i]
+    //         << '\n';
+    // }
 
     cudaFree(d_voltage);
     cudaFree(d_result);
