@@ -4,6 +4,7 @@
 #include <iostream>   
 #include <iomanip>
 #include "vector.h"
+#include <cmath>
 
 //References:
 //https://devblogs.nvidia.com/using-shared-memory-cuda-cc/
@@ -15,12 +16,11 @@
 #include <cuda_runtime.h>
 #include "cusolverDn.h"
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-    if (code != cudaSuccess) 
-    {
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true){
+    if (code != cudaSuccess) {
         fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-        if (abort) exit(code);
+        if (abort) 
+            exit(code);
     }
 }
 
@@ -41,7 +41,6 @@ __host__ float* DoubleExp(float* param, int N){
     return A;
 }
 
-
 //Copy vector. A = B; 
 __global__ void CopyVecf(float* A, float* B, int N){
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -55,32 +54,58 @@ __host__ void CopyVecfh(float* A, float* B, int N){
 
 //Calculates the Jacobian of f(t) for K parameters and N data points
 //Returns N x K matrix in column major order
-const float eps = 1e-6;
+
 __host__ float* Jacobian(float* f(float* param, int N), float* param, int N, int K){
+    const float eps = pow(2,-17);
     float* J;
     gpuErrchk(cudaMalloc(&J, N * K * sizeof(float)));
 
     float* prev = f(param, N);
     float* next;
 
-    float* debug = (float*)malloc(N * sizeof(float));
+    float* debug = (float*)malloc(N * K * sizeof(float));
 
 
     for (int i = 0; i < K; i++){
         param[i] += eps;
         next = f(param, N);
-        
-        cudaMemcpy(debug, next, N*sizeof(float),cudaMemcpyDeviceToHost);
-        for (int j = 0; j < N; j++){
-            std::cout << debug[j] << '\n';
-        }
-
         SubVecfh(next, prev, (float*)&J[i * N], N);
         param[i] -= eps;
         cudaFree(next);
     }
+    
     cudaFree(prev);
     return ScaleVecf(J, float(1./eps), N * K);
+}
+
+//Same as Jacboian() but uses adaptive values of epsilon scaled with the value of param.
+//This can achieve better precisions across a wider range of values.
+__host__ float* Jacobian2(float* f(float* param, int N), float* param, int N, int K){
+    const float eps = pow(2,-10);
+    float* J;
+    gpuErrchk(cudaMalloc(&J, N * K * sizeof(float)));
+
+    float* prev = f(param, N);
+    float* next;
+    float temp, dB, scale;
+
+    for (int i = 0; i < K; i++){
+        temp = param[i];
+        dB = param[i] * eps;
+        if (dB < 1e-35 && dB > -1e-35)
+            dB = 1e-30;
+        scale = 1./dB;
+        param[i] += dB;
+        std::cout << dB <<  "  " << scale << "  " << param[i] << '\n';
+        next = f(param, N);
+        SubVecfh(next, prev, (float*)&J[i * N], N);
+        ScaleVecfh((float*)&J[i * N], scale, (float*)&J[i * N], N);
+        param[i] = temp;
+        cudaFree(next);
+    }
+    
+    cudaFree(prev);
+    return J;
 }
 
 __host__ void SVD(float* A, int M, int N, float* S, float* U, float* VT){  
@@ -159,9 +184,6 @@ __host__ void FitGaussNewton(float* A, float* param, float* f(float* param, int 
 }
 
 
-
-
-
 int main(){
     int N = 1000;
     size_t size = N * sizeof(float);
@@ -199,19 +221,20 @@ int main(){
         -10 * 1e-3};
 
     float* result = (float*) malloc(size * 5);
-    float* d_result = vector::Jacobian(vector::DoubleExp, param, N, 5);
+    float* d_result = vector::Jacobian2(vector::DoubleExp, param, N, 5);
     //float* d_result = vector::DoubleExp(param, N);
-    cudaMemcpy(result, d_result, size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(result, d_result, size * 5, cudaMemcpyDeviceToHost);
 
-    // for (int i = 0; i < N; i++){
-    //     std::cout << std::left 
-    //         << std::setw(15) << result[i]
-    //         << std::setw(15) << result[i+N]
-    //         << std::setw(15) << result[i+2*N]
-    //         << std::setw(15) << result[i+3*N]
-    //         << std::setw(15) << result[i+4*N]
-    //         << '\n';
-    // }
+    for (int i = 0; i < N; i++){
+        std::cout << std::left 
+            << std::setw(15) << i
+            << std::setw(15) << result[i]
+            << std::setw(15) << result[i+N]
+            << std::setw(15) << result[i+2*N]
+            << std::setw(15) << result[i+3*N]
+            << std::setw(15) << result[i+4*N]
+            << '\n';
+    }
 
     cudaFree(d_voltage);
     cudaFree(d_result);
