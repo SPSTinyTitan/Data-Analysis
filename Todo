@@ -1,5 +1,5 @@
 - Add consts to indicate which operations maintain data
-- Remove vector return values
-- Error checking
+- DONE - Remove vector return values
+- Ensure proper Error checking
 - Optimize using shared memory
 - Rename variables for readability (_h _d)

@@ -1,7 +1,7 @@
 #ifndef vector_wrappers
 #define vector_wrappers
 
-#include "cuda_tools.h"
+#include <cuda_tools.h>
 
 namespace vector{
     const int threadsPerBlock = 256;

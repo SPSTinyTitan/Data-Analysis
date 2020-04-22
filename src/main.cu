@@ -5,10 +5,10 @@
 #include <iomanip>
 #include <cmath>
 
-#include "vector_wrappers.h"
-#include "matrix_wrappers.h"
-#include "fitting.h"
-#include "cuda_tools.h"
+#include <vector_wrappers.h>
+#include <matrix_wrappers.h>
+#include <fitting.h>
+#include <cuda_tools.h>
 
 
 

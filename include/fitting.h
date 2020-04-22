@@ -6,9 +6,9 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 
-#include "cuda_tools.h"
-#include "vector_wrappers.h"
-#include "matrix_wrappers.h"
+#include <cuda_tools.h>
+#include <vector_wrappers.h>
+#include <matrix_wrappers.h>
 
 namespace fit{
 

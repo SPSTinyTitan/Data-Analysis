@@ -1,4 +1,4 @@
-#include "vector_wrappers.h"
+#include <vector_wrappers.h>
 
 namespace vector{
 
@@ -96,7 +96,7 @@ namespace vector{
             result[blockIdx.x] = temp[0];
     }
     __host__ float sum(float* A, int N){
-        
+
         size_t result_size = threadsPerBlock * sizeof(float);
 
         float result;
