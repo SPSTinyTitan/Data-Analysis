@@ -89,7 +89,7 @@ namespace matrix{
         //Copy matrix if storing back
         if (A == B){
             gpuErrchk(cudaMalloc(&C, M * N * sizeof(float)));
-            vector::copy(A, C, M * N);
+            vector::copy(C, A, M * N);
         }
         else
             C = A;
