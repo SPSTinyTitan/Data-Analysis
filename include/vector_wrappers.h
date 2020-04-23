@@ -1,7 +1,7 @@
 #ifndef vector_wrappers
 #define vector_wrappers
 
-#include <cuda_tools.h>
+#include "cuda_tools.h"
 
 namespace vector{
     const int threadsPerBlock = 256;
@@ -19,12 +19,20 @@ namespace vector{
     __global__  void    sub_    (float* A, float* B, float* C, int N);
     __host__    void    sub     (float* A, float* B, float* C, int N);
 
-    //Element wise multiplication of vectors. For dot products see DotVec().
+    //Element wise multiplication of vectors.
     __global__  void    mult_   (float* A, float* B, float* C, int N);
     __global__  void    mult_   (float* A, float B, float* C, int N);
     __host__    void    mult    (float* A, float* B, float* C, int N);
     __host__    void    mult    (float* A, float B, float* C, int N);
     __host__    void    mult    (float A, float* B, float* C, int N);
+
+    //Element wise division of vectors.
+    __global__  void    div_    (float* A, float* B, float* C, int N);
+    __global__  void    div_    (float* A, float B, float* C, int N);
+    __global__  void    div_    (float A, float* B, float* C, int N);
+    __host__    void    div     (float* A, float* B, float* C, int N);
+    __host__    void    div     (float* A, float B, float* C, int N);
+    __host__    void    div     (float A, float* B, float* C, int N);
 
     //Implement this
     // __host__ float DotVecf(float* A, float* B, int N);
@@ -33,7 +41,7 @@ namespace vector{
     __global__  void    sum_    (float* X, float* result, int N);
     __host__    float   sum     (float* A, int N);
 
-    //Copy vector.
+    //Copy vector. A = B;
     __global__  void    copy_   (float* A, float* B, int N);
     __host__    void    copy    (float* A, float* B, int N);
 }

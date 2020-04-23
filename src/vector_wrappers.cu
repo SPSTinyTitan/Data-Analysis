@@ -1,4 +1,4 @@
-#include <vector_wrappers.h>
+#include "vector_wrappers.h"
 
 namespace vector{
 
@@ -38,7 +38,7 @@ namespace vector{
         gpuErrchk(cudaDeviceSynchronize());
     }
 
-    //Element wise multiplication of vectors. For dot products see DotVec().
+    //Element wise multiplication of vectors.
     __global__ void mult_(float* A, float* B, float* C, int N){
         int i = blockDim.x * blockIdx.x + threadIdx.x;
         if (i < N)
@@ -68,6 +68,46 @@ namespace vector{
         mult_<<<blocksPerGrid, threadsPerBlock>>>(B, A, C, N);
         gpuErrchk(cudaDeviceSynchronize());
     }
+
+    //Element wise division of vectors.
+    __global__ void div_(float* A, float* B, float* C, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            C[i] = A[i] / B[i];
+    }
+    __global__ void div_(float* A, float B, float* C, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            C[i] = A[i] / B;
+    }
+    __global__ void div_(float A, float* B, float* C, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            C[i] = A / B[i];
+    }
+    //Implement this
+    // __host__ float DotVecf(float* A, float* B, int N){
+
+    // }
+    __host__ void div(float* A, float* B, float* C, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        div_<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+    __host__ void div(float* A, float B, float* C, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        div_<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+    __host__ void div(float A, float* B, float* C, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        div_<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+
+
+    
+
 
     //Sum of elements in vector.
     __global__ void sum_(float* X, float* result, int N){

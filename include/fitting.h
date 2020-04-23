@@ -6,9 +6,9 @@
 #include <cublas_v2.h>
 #include <cusolverDn.h>
 
-#include <cuda_tools.h>
-#include <vector_wrappers.h>
-#include <matrix_wrappers.h>
+#include "cuda_tools.h"
+#include "vector_wrappers.h"
+#include "matrix_wrappers.h"
 
 namespace fit{
 
@@ -21,13 +21,13 @@ namespace fit{
 
     //Calculates the Jacobian of f(t) for K parameters and N data points
     //Returns N x K matrix in column major order
-    __host__    void    jacobian    (float* J, float* f(float* A, float* param, int N), float* param, int N, int K);
+    __host__    void    jacobian    (float* J, void f(float* A, float* param, int N), float* param, int N, int K);
 
 
     //Same as jacboian() but uses adaptive values of epsilon scaled with the value of param.
     //This can achieve better precisions across a wider range of values.
     //TODO: Consider logarithms then addition instead of multiplications. Reduces arithmetic error.
-    __host__    void    jacobian_v2 (float* J, float* f(float* A, float* param, int N), float* param, int N, int K);
+    __host__    void    jacobian_v2 (float* J, void f(float* A, float* param, int N), float* param, int N, int K);
 
     __host__    void    svd         (float* A, int M, int N, float* S, float* U, float* VT);
 }

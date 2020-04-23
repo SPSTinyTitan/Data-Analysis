@@ -1,4 +1,4 @@
-#include <fitting.h>
+#include "fitting.h"
 
 namespace fit{
 
@@ -17,7 +17,7 @@ namespace fit{
 
     //Calculates the Jacobian of f(t) for K parameters and N data points
     //Returns N x K matrix in column major order
-    __host__ void jacobian(float* J, float* f(float* A, float* param, int N), float* param, int N, int K){
+    __host__ void jacobian(float* J, void f(float* A, float* param, int N), float* param, int N, int K){
         const float eps = pow(2,-17);
         float* prev;    gpuErrchk(cudaMalloc(&prev, N * sizeof(float)));
         float* next;    gpuErrchk(cudaMalloc(&next, N * sizeof(float)));
@@ -44,7 +44,7 @@ namespace fit{
     //Same as Jacboian() but uses adaptive values of epsilon scaled with the value of param.
     //This can achieve better precisions across a wider range of values.
     //TODO: Consider logarithms then addition instead of multiplications. Reduces arithmetic error.
-    __host__ void jacobian_v2(float* J, float* f(float* A, float* param, int N), float* param, int N, int K){
+    __host__ void jacobian_v2(float* J, void f(float* A, float* param, int N), float* param, int N, int K){
         const float eps = pow(2,-10);
         float* prev;    gpuErrchk(cudaMalloc(&prev, N * sizeof(float)));
         float* next;    gpuErrchk(cudaMalloc(&next, N * sizeof(float)));
@@ -82,10 +82,7 @@ namespace fit{
     
         cusolverDnHandle_t handle;
         cusolverStatus_t stat = cusolverDnCreate(&handle);
-        if (stat != CUSOLVER_STATUS_SUCCESS) {
-            printf ("CUSOLVER initialization failed\n");
-            exit(EXIT_FAILURE);
-        }
+        assert(CUSOLVER_STATUS_SUCCESS == stat);
         
         int lwork;
         stat = cusolverDnSgesvd_bufferSize(
@@ -93,10 +90,7 @@ namespace fit{
             M,
             N,
             &lwork);
-        if (stat != CUSOLVER_STATUS_SUCCESS) {
-            printf ("SVD buffer failed\n");
-            exit(EXIT_FAILURE);
-        }
+        assert(CUSOLVER_STATUS_SUCCESS == stat);
     
         float* work;    gpuErrchk(cudaMalloc(&work, lwork * sizeof(float)));
         int* devInfo;   gpuErrchk(cudaMalloc(&devInfo, sizeof(int))); 
@@ -105,17 +99,12 @@ namespace fit{
             handle,
             'A',
             'A',
-            M,
-            N,
-            A,
-            M,
+            M, N,
+            A, M,
             S,
-            U,
-            M,
-            VT,
-            N,
-            work,
-            lwork,
+            U, M,
+            VT, N,
+            work, lwork,
             NULL,
             devInfo);
         gpuErrchk(cudaDeviceSynchronize());
