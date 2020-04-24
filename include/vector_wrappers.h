@@ -34,8 +34,9 @@ namespace vector{
     __host__    void    div     (float* A, float B, float* C, int N);
     __host__    void    div     (float A, float* B, float* C, int N);
 
-    //Implement this
-    // __host__ float DotVecf(float* A, float* B, int N);
+    //Dot product
+    __global__  void    dot_    (float* A, float* B, float* result, int N);
+    __host__    float   dot     (float* A, float* B, int N);
 
     //Sum of elements in vector.
     __global__  void    sum_    (float* X, float* result, int N);
@@ -44,6 +45,39 @@ namespace vector{
     //Copy vector. A = B;
     __global__  void    copy_   (float* A, float* B, int N);
     __host__    void    copy    (float* A, float* B, int N);
-}
 
+    //Applies Lambda function
+    // template<typename f>
+    // __device__  void    apply__ (float* A, float* B, f&& lambda, int N);
+    // template<typename f>
+    // __device__  void    apply__ (float* A, float* B, float* C, f&& lambda, int N);
+    // template<typename f>
+    // __device__  void    apply__ (float* A, float B, float* C, f&& lambda, int N);
+
+    //Logic operators
+    // __global__  void    g_      (float* A, float* B, float* C, int N);
+    // __global__  void    g_      (float* A, float B, float* C, int N);
+    // __global__  void    l_      (float* A, float* B, float* C, int N);
+    // __global__  void    l_      (float* A, float* B, float* C, int N);
+    // __global__  void    geq_    (float* A, float* B, float* C, int N);
+    // __global__  void    geq_    (float* A, float B, float* C, int N);
+    // __global__  void    leq_    (float* A, float* B, float* C, int N);
+    // __global__  void    leq_    (float* A, float* B, float* C, int N);
+    // __global__  void    eq_     (float* A, float* B, float* C, int N);
+    // __global__  void    eq_     (float* A, float B, float* C, int N);
+    // __global__  void    eq_     (float* A, float* B, float* C, int N);
+    // __global__  void    eq_     (float* A, float* B, float* C, int N);
+    // __host__    void    g       (float* A, float* B, float* C, int N);
+    // __host__    void    g       (float* A, float B, float* C, int N);
+    // __host__    void    l       (float* A, float* B, float* C, int N);
+    // __host__    void    l       (float* A, float* B, float* C, int N);
+    // __host__    void    geq     (float* A, float* B, float* C, int N);
+    // __host__    void    geq     (float* A, float B, float* C, int N);
+    // __host__    void    leq     (float* A, float* B, float* C, int N);
+    // __host__    void    leq     (float* A, float* B, float* C, int N);
+    // __host__    void    eq      (float* A, float* B, float* C, int N);
+    // __host__    void    eq      (float* A, float B, float* C, int N);
+    // __host__    void    eq      (float* A, float* B, float* C, int N);
+    // __host__    void    eq      (float* A, float* B, float* C, int N);
+}
 #endif //vector_wrappers

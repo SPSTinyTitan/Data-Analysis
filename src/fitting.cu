@@ -80,13 +80,13 @@ namespace fit{
 
     __host__ void svd(float* A, int M, int N, float* S, float* U, float* VT){ 
     
-        cusolverDnHandle_t handle;
-        cusolverStatus_t stat = cusolverDnCreate(&handle);
+        cusolverDnHandle_t cusolverH;
+        cusolverStatus_t stat = cusolverDnCreate(&cusolverH);
         assert(CUSOLVER_STATUS_SUCCESS == stat);
         
         int lwork;
         stat = cusolverDnSgesvd_bufferSize(
-            handle,
+            cusolverH,
             M,
             N,
             &lwork);
@@ -96,7 +96,7 @@ namespace fit{
         int* devInfo;   gpuErrchk(cudaMalloc(&devInfo, sizeof(int))); 
 
         stat = cusolverDnSgesvd(
-            handle,
+            cusolverH,
             'A',
             'A',
             M, N,
@@ -112,6 +112,7 @@ namespace fit{
 
         if (work) cudaFree(work);
         if (devInfo) cudaFree(devInfo);
+        if (cusolverH) cusolverDnDestroy(cusolverH);
     }
     
 }

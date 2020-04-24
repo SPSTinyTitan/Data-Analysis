@@ -85,10 +85,22 @@ namespace vector{
         if (i < N)
             C[i] = A / B[i];
     }
-    //Implement this
-    // __host__ float DotVecf(float* A, float* B, int N){
+    __global__ void dot_(float* A, float* B, float* result, int N){
+        size_t result_size = threadsPerBlock * sizeof(float);
+        mult_<<<gridDim, blockDim>>>(A, B, result, N);
+        sum_<<<blocksPerGrid, threadsPerBlock, blocksPerGrid * result_size>>>(result, result, N);
+        sum_<<<1, threadsPerBlock, result_size>>>(result, result, blocksPerGrid);
+    }
+    __host__ float dot(float* A, float* B, int N){
+        float *result_d; gpuErrchk(cudaMalloc(&result_d, N * sizeof(float)));
+        float result;
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        dot_<<<blocksPerGrid, threadsPerBlock>>>(A, B, result_d, N);
+        gpuErrchk(cudaMemcpy(&result, result_d, sizeof(float), cudaMemcpyDeviceToHost));
+        if (result_d) cudaFree(result_d);
+        return result;
+    }
 
-    // }
     __host__ void div(float* A, float* B, float* C, int N){
         int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
         div_<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, N);
@@ -163,5 +175,23 @@ namespace vector{
         copy_<<<blocksPerGrid, threadsPerBlock>>>(A, B, N);
         gpuErrchk(cudaDeviceSynchronize());
     }
-
+    //Applies lambda function to a vector
+    // template<typename f>
+    // __device__ void apply__(float* A, float* B, f&& lambda, int N){
+    //     int i = blockDim.x * blockIdx.x + threadIdx.x;
+    //     if (i < N)
+    //         B[i] = lambda(A[i]);
+    // }
+    // template<typename f>
+    // __device__ void apply__(float* A, float B, float* C, f&& lambda, int N){
+    //     int i = blockDim.x * blockIdx.x + threadIdx.x;
+    //     if (i < N)
+    //         C[i] = lambda(A[i], B);
+    // }
+    // template<typename f>
+    // __device__ void apply__(float* A, float* B, float* C, f&& lambda, int N){
+    //     int i = blockDim.x * blockIdx.x + threadIdx.x;
+    //     if (i < N)
+    //         C[i] = lambda(A[i], B[i]);
+    // }
 }

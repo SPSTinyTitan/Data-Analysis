@@ -8,8 +8,8 @@ LDIR := lib
 
 CC := nvcc
 NVCC := nvcc
-CFLAGS := -I$(IDIR)
-LDFLAGS := -L$(LDIR) 
+CFLAGS :=  -I$(IDIR) -I$(SRC_DIR) -arch=sm_35 -rdc=true --extended-lambda
+LDFLAGS := -L$(LDIR) -arch=sm_35
 LDLIBS = -lcusolver -lcublas
 
 SRC := $(wildcard $(SRC_DIR)/*.cu)

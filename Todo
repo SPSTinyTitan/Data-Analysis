@@ -3,3 +3,4 @@
 - Ensure proper Error checking
 - Optimize using shared memory
 - Rename variables for readability (_h _d)
+- Check for memory leaks !!!

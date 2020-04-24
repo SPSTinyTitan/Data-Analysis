@@ -31,6 +31,8 @@ namespace matrix{
             C, M
         );
         assert(CUBLAS_STATUS_SUCCESS == cublas_status);
+        gpuErrchk(cudaDeviceSynchronize());
+        if (cublasH) cublasDestroy(cublasH);
     }
 
     //Calculates diagonal matrix multiplication
@@ -57,6 +59,8 @@ namespace matrix{
             C, M
         );
         assert(CUBLAS_STATUS_SUCCESS == cublas_status);
+        gpuErrchk(cudaDeviceSynchronize());
+        if (cublasH ) cublasDestroy(cublasH);
     }
 
     //Nvidia Reference implementation
@@ -96,6 +100,7 @@ namespace matrix{
         dim3 grid((M - 1 + BLOCK_DIM) / BLOCK_DIM, (N - 1 + BLOCK_DIM) / BLOCK_DIM, 1);
         dim3 threads(BLOCK_DIM, BLOCK_DIM, 1);
         transpose_<<<grid, threads>>>(C, B, M, N);
-
+        gpuErrchk(cudaDeviceSynchronize());
+        if (A == B && C) cudaFree(C);
     }
 }

@@ -6,9 +6,8 @@
 
 #include "vector_wrappers.h"
 #include "matrix_wrappers.h"
-#include "fitting.h"
 #include "cuda_tools.h"
-
+#include "fitting.h"
 
 
 //References:
@@ -16,8 +15,33 @@
 //https://docs.nvidia.com/cuda/cublas/index.html
 //https://docs.nvidia.com/cuda/cusolver/index.html
 
-
 namespace fit{
+
+    // Applies lambda function to a vector
+    template<typename f>
+    __device__ float apply__(float A, float B, f lambda){
+        return lambda(A, B);
+    }
+    template<typename f>
+    __global__ void apply_(float* A, float B, float* C, f lambda, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            C[i] = apply__(A[i], B, lambda);
+    }
+    template<typename f>
+    __host__ void apply(float* A, float B, float* C, f lambda, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        apply_<<<blocksPerGrid, threadsPerBlock>>>(A, B, C, lambda, N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+    __host__ void invertS(float* S, float* invS, int N){
+        auto lambda = []__device__(float a, float b){return (a > b) ? (1./a) : 0;};
+        float eps = 1e-25 * vector::dot(S, S, N);
+        std::cout << eps << ":\n";
+        //print_(S, 1, N);
+        apply(S, eps, S, lambda, N);
+        //print_(S, 1, N);
+    }
 
     __host__ void pInv(float* A, int M, int N){
 
@@ -34,8 +58,9 @@ namespace fit{
 
         matrix::multD(S, VT, W, N, M);
         matrix::mult(U, W, A, 1, 1, false, false, M, N, N);
+        invertS(S, S, P);
 
-        vector::div(1,S,S,P);
+
         matrix::multD(S, VT, W, N, M);
         matrix::mult(U, W, A, 1, 1, false, false, M, N, N);
         matrix::transpose(A, A, M, N);
@@ -48,39 +73,49 @@ namespace fit{
     }
 
     //Gauss-Newton method
-    __host__ void FitGaussNewton(float* A, float* param, void f(float* A, float* param, int N), int N, int K){
+    __host__ void gaussNewton(float* A, float* param, void f(float* A, float* param, int N), int N, int K){
+
+        float eps = 0.05;
 
         //Finding inverse of Jacobian
         float* J;       gpuErrchk(cudaMalloc(&J, N * K * sizeof(float)));
         float* F;       gpuErrchk(cudaMalloc(&F, N * sizeof(float)));
         float* P;       gpuErrchk(cudaMalloc(&P, K * sizeof(float)));
         float* P_h =    (float*)malloc(K *sizeof(float));
-        
-        for (int j = 0; j < 10; j++){
-        //J^-1
-        jacobian_v2(J, f, param, N, K);
-        pInv(J, N, K);
-        
-        //y - f(param)
-        fit::doubleExp(F, param, N);
-        vector::sub(A, F, F, N);
+        float error;
+        int count = 0;
+        do{
+            count++;
+            //J^-1
+            jacobian_v2(J, f, param, N, K);
+            pInv(J, N, K);
+            
+            //(y - f(param))
+            doubleExp(F, param, N);
+            vector::sub(A, F, F, N);
+            
+            //J^-1(y - f(param))
+            matrix::mult(J, F, P, 1, 1, false, false, K, N, 1);
 
-        //J^-1(y - f(param))
-        matrix::mult(J, F, P, 1, 1, false, false, K, N, 1);
+            //Update param
+            cudaMemcpy(P_h, P, K * sizeof(float), cudaMemcpyDeviceToHost);
+            for (int i = 0; i < K; i++)
+                param[i] += eps * P_h[i];
+            
+            //Print errors
+            // doubleExp(F, param, N);
+            // vector::sub(A, F, F, N);
+            // std::cout << "Error:" << vector::sum(F, N) << '\n';
 
-        //Update param
-        cudaMemcpy(P_h, P, K * sizeof(float), cudaMemcpyDeviceToHost);
-        for (int i = 0; i < K; i++){
-            param[i] += 0.1 * P_h[i];
-        }
+            error = vector::sum(F, N)/N;
+
+        }while(error > 0.01);
         
-        fit::doubleExp(F, param, N);
-        vector::sub(A, F, F, N);
-        std::cout << "Error:" << vector::sum(F, N) << '\n';
-        }
-        
+        std::cout << "Converged in " << count << "iterations\n";
         if (J)  cudaFree(J);
         if (F)  cudaFree(F);
+        if (P)  cudaFree(P);
+        if (P_h) free(P_h);
     }
 
 }
@@ -150,12 +185,15 @@ void TestSvd(){
 }
 
 int main(){
-    int N = 20;
+    int N = 5000;
     size_t size = N * sizeof(float);
     float T = 1e-9;
     float* voltage = (float*)malloc(size);
-    float* d_voltage;
-    gpuErrchk(cudaMalloc(&d_voltage, size));
+    float* d_voltage;   gpuErrchk(cudaMalloc(&d_voltage, size));
+    float* d_fit;       gpuErrchk(cudaMalloc(&d_fit, size));
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
     // voltage[0] = 0;
     // for (int i = 1; i < N; i++){
@@ -170,7 +208,7 @@ int main(){
 
     voltage[0] = 100;
     for (int i = 1; i < N; i++){
-        voltage[i] = voltage[i-1] * 0.99998000019999866667;
+        voltage[i] = voltage[i-1] * 0.99998;
     }
 
     //Moving data to GPU
@@ -186,7 +224,17 @@ int main(){
         -10 * 1e-3
     };
 
-    fit::FitGaussNewton(d_voltage, param, fit::doubleExp, N, 5);
+    cudaEventRecord(start);
+    fit::gaussNewton(d_voltage, param, fit::doubleExp, N, 5);
+    cudaEventRecord(stop);
+    fit::doubleExp(d_fit, param, N);
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << milliseconds << "\n\n";
+    //print_(d_fit, N, 1);
+    //print_(d_voltage, N, 1);
+    print(param, 1, 5);
+
     //TestMult();
     //TestSvd();
     cudaFree(d_voltage);
