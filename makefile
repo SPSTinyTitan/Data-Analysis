@@ -10,7 +10,7 @@ CC := nvcc
 NVCC := nvcc
 CFLAGS :=  -I$(IDIR) -I$(SRC_DIR) -arch=sm_35 -rdc=true --extended-lambda
 LDFLAGS := -L$(LDIR) -arch=sm_35
-LDLIBS = -lcusolver -lcublas
+LDLIBS = -lcusolver -lcublas 
 
 SRC := $(wildcard $(SRC_DIR)/*.cu)
 OBJ := $(SRC:$(SRC_DIR)/%.cu=$(OBJ_DIR)/%.o)

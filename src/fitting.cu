@@ -14,6 +14,29 @@ namespace fit{
         gpuErrchk(cudaDeviceSynchronize());
     }
 
+    //Return: ax + b
+    __global__ void linear_(float* A, float a, float b, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            A[i] = a * i + b;
+    }
+    __host__ void linear(float* A, float* param, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        linear_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+    
+    __global__ void lincoef_ (float* A, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            A[i] = i;
+            A[N+i] = 1;
+    }
+    __host__ void lincoef (float* A, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        lincoef_<<<blocksPerGrid, threadsPerBlock>>>(A, N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
 
     //Calculates the Jacobian of f(t) for K parameters and N data points
     //Returns N x K matrix in column major order
@@ -78,7 +101,7 @@ namespace fit{
         if(next) cudaFree(next);
     }
 
-    __host__ void svd(float* A, int M, int N, float* S, float* U, float* VT){ 
+    __host__ void svd(float* A, float* U, float* S, float* VT, int M, int N){ 
     
         cusolverDnHandle_t cusolverH;
         cusolverStatus_t stat = cusolverDnCreate(&cusolverH);

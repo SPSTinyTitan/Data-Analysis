@@ -103,4 +103,70 @@ namespace matrix{
         gpuErrchk(cudaDeviceSynchronize());
         if (A == B && C) cudaFree(C);
     }
+
+    __host__ void inverse (float* A, float* B, int N){
+        float* C;
+        if (A == B)
+            cudaMalloc(&C, N * N * sizeof(float));
+        else C = B;
+
+        //Initializing CuBlas
+        cusolverDnHandle_t cusolverH = NULL;
+        cusolverStatus_t cusolver_status = CUSOLVER_STATUS_SUCCESS;
+        cusolver_status = cusolverDnCreate(&cusolverH);
+        assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+
+        int lwork;
+
+        cusolver_status = cusolverDnSgetrf_bufferSize(
+            cusolverH,
+            N, N,
+            A, N,
+            &lwork 
+        );
+        gpuErrchk(cudaDeviceSynchronize());
+        assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+
+        float* work;    gpuErrchk(cudaMalloc(&work, lwork * sizeof(float)));
+        int* P;         gpuErrchk(cudaMalloc(&P, N * sizeof(int)));
+        int* devInfo;   gpuErrchk(cudaMalloc(&devInfo, sizeof(int))); 
+
+        cusolver_status = cusolverDnSgetrf(
+            cusolverH,
+            N, N,
+            A, N,
+            work,
+            P,
+            devInfo
+        );
+        gpuErrchk(cudaDeviceSynchronize());
+        assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+
+
+        float* identity = (float*)malloc(N * N * sizeof(float));
+        for (int i = 0; i < N * N; i++)
+            identity[i] = 0;
+        for (int i = 0; i < N; i++)
+            identity[i * (N+1)] = 1; 
+        gpuErrchk(cudaMemcpy(C, identity, N * N * sizeof(float), cudaMemcpyHostToDevice));
+        cusolverDnSgetrs(cusolverH,
+            CUBLAS_OP_N,
+            N, N,
+            A, N,
+            P,
+            C, N,
+            devInfo 
+        );
+        gpuErrchk(cudaDeviceSynchronize());
+        assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
+
+        if (identity)   free(identity);
+        if (devInfo)    cudaFree(devInfo);
+        if (work)       cudaFree(work);
+        if (P)          cudaFree(P);  
+        if (A == B){
+            vector::copy(A, C, N * N);
+            cudaFree(C);
+        }
+    }
 }
