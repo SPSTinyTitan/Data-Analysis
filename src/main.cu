@@ -109,7 +109,7 @@ namespace fit{
 
             error = vector::sum(F, N)/N;
 
-        }while(error > 0.01);
+        }while(error > 0.001);
         
         std::cout << "Converged in " << count << " iterations\n";
         if (J)  cudaFree(J);
@@ -222,7 +222,15 @@ void TestLinFit(){
     for (int i = 1; i < N; i++)
         voltage[i] = voltage[i-1] - 0.5;
     cudaMemcpy(d_voltage, voltage, size, cudaMemcpyHostToDevice);
+    float milliseconds = 0;
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
     fit::robust(d_voltage, a, N);
+    cudaEventRecord(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << milliseconds << "ms elapsed.\n";
     print_(a, 1, 2);
 }
 
@@ -233,6 +241,7 @@ int main(){
     float* voltage = (float*)malloc(size);
     float* d_voltage;   gpuErrchk(cudaMalloc(&d_voltage, size));
     float* d_fit;       gpuErrchk(cudaMalloc(&d_fit, size));
+    float milliseconds = 0;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -254,7 +263,7 @@ int main(){
 
     //Fitting V = ae^(kt) + be^(qt) + c
     //param: {a, b, c, k, q}
-    std::cout << "Fitting double exponential.\n"; 
+    std::cout << "\n\n\nFitting double exponential (5 parameter non-linear fit).\nV = ae^(kt) + be^(qt) + c\n"; 
     float param[5] = {
         1,
         -1,
@@ -267,21 +276,19 @@ int main(){
     fit::gaussNewton(d_voltage, param, fit::doubleExp, N, 5);
     cudaEventRecord(stop);
     fit::doubleExp(d_fit, param, N);
-    float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
-    std::cout << milliseconds << "ms elapsed." << "\n\n";
+    std::cout << milliseconds << "ms elapsed." << "\n";
 
     //print_(d_fit, N, 1);
     //print_(d_voltage, N, 1);
-    std::cout << "Expected parameters:\n 100, 0, 0, <undefined>, .99998 \n";
+    std::cout << "Expected parameters:\n 100, 0, 0, -0.00002, <undefined>\n";
     std::cout << "Result: \n";
     print(param, 1, 5);
-
     
     //TestMult();
     //TestSvd();
     //TestInv();
-    std::cout << "Fitting linear.\nExpected Parameters:\n-0.5, 100 \n";
+    std::cout << "\n\nFitting linear (2 parameter linear fit).\nV = at + b\nExpected Parameters:\n-0.5, 100 \n";
     std::cout << "Result: \n";
     TestLinFit();
     cudaFree(d_voltage);
