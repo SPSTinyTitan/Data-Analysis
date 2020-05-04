@@ -2,7 +2,7 @@
 
 namespace vector{
 
-    //Element wise logarithm of a vector
+    //Element wise logarithm of vector.
     __global__ void log_(float* A, float* B, int N){
         int i = blockDim.x * blockIdx.x + threadIdx.x;
         if (i < N)
@@ -11,6 +11,31 @@ namespace vector{
     __host__ void log(float* A, float* B, int N){
         int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
         log_<<<blocksPerGrid, threadsPerBlock>>>(A, B, N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+
+    //Element wise exponentiation of vector.
+    __global__ void exp_(float* A, float* B, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            B[i] = expf(A[i]);
+    }
+    __host__ void exp(float* A, float* B, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        exp_<<<blocksPerGrid, threadsPerBlock>>>(A, B, N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+
+
+    //Element wise absolute value of vector.
+    __global__ void abs_(float* A, float* B, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            B[i] = fabsf(A[i]);
+    }
+    __host__ void abs(float* A, float* B, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        abs_<<<blocksPerGrid, threadsPerBlock>>>(A, B, N);
         gpuErrchk(cudaDeviceSynchronize());
     }
 
@@ -38,7 +63,7 @@ namespace vector{
         gpuErrchk(cudaDeviceSynchronize());
     }
 
-    //Element wise multiplication of vectors.
+    //Element wise multiplication of vector.
     __global__ void mult_(float* A, float* B, float* C, int N){
         int i = blockDim.x * blockIdx.x + threadIdx.x;
         if (i < N)
@@ -128,12 +153,12 @@ namespace vector{
         int threadsPerGrid = gridDim.x * blockDim.x;
         float sum = 0;
 
-        //Having each thread sum a portion of elements
+        //Each thread sum a portion of elements
         for (int i = idx; i < N; i += threadsPerGrid){
             sum += X[i];
         }
         
-        //Summing the results of each thread in each block
+        //Sum results of each thread within each block
         float* temp = &s[gridDim.x * blockIdx.x];
         temp[threadIdx.x] = sum;
         __syncthreads();
@@ -147,6 +172,7 @@ namespace vector{
         if (threadIdx.x == 0)
             result[blockIdx.x] = temp[0];
     }
+    
     __host__ float sum(float* A, int N){
 
         size_t result_size = threadsPerBlock * sizeof(float);

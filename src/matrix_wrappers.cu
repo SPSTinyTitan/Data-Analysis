@@ -6,6 +6,9 @@ namespace matrix{
     //A - M x N
     //B - N x K
     //C - M x K
+    __host__ void mult(float* A, float* B, float* C, int M, int N, int K){
+        mult(A, B, C, 1., 1., false, false, M, N, K);
+    }
     __host__ void mult(float* A, float* B, float* C, float alpha, float beta, bool TA, bool TB, int M, int N, int K){
 
         //Initializing CuBlas
@@ -159,7 +162,8 @@ namespace matrix{
         );
         gpuErrchk(cudaDeviceSynchronize());
         assert(CUSOLVER_STATUS_SUCCESS == cusolver_status);
-
+        
+        if (cusolverH) cusolverDnDestroy(cusolverH);
         if (identity)   free(identity);
         if (devInfo)    cudaFree(devInfo);
         if (work)       cudaFree(work);

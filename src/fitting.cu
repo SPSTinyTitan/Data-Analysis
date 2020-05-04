@@ -10,7 +10,7 @@ namespace fit{
     }
     __host__ void doubleExp(float* A, float* param, int N){
         int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
-        doubleExp_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], param[2], param[3], param[4], N);
+        doubleExp_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], param[2], -abs(param[3]), -abs(param[4]), N);
         gpuErrchk(cudaDeviceSynchronize());
     }
 

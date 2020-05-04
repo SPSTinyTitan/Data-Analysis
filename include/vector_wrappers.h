@@ -7,9 +7,17 @@ namespace vector{
     const int threadsPerBlock = 256;
     const int blocksPerGrid = 20;
 
-    //Element wise logarithm of a vector
+    //Element wise logarithm of vector.
     __global__  void    log_    (float* A, float* B, int N);
     __host__    void    log     (float* A, float* B, int N);
+
+    //Element wise exponentiation of vector.
+    __global__  void    exp_    (float* A, float* B, int N);
+    __host__    void    exp     (float* A, float* B, int N);
+
+    //Element wise absolute value of vector.
+    __global__  void    abs_    (float* A, float* B, int N);
+    __host__    void    abs     (float* A, float* B, int N);
 
     //Element wise addition of vector. 
     __global__  void    add_    (float* A, float* B, float* C, int N);
@@ -19,7 +27,7 @@ namespace vector{
     __global__  void    sub_    (float* A, float* B, float* C, int N);
     __host__    void    sub     (float* A, float* B, float* C, int N);
 
-    //Element wise multiplication of vectors.
+    //Element wise multiplication of vector.
     __global__  void    mult_   (float* A, float* B, float* C, int N);
     __global__  void    mult_   (float* A, float B, float* C, int N);
     __host__    void    mult    (float* A, float* B, float* C, int N);
