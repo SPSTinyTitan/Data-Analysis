@@ -16,12 +16,15 @@ namespace fit{
     const int blocksPerGrid = 20;
 
     //Return: ae^(kt) + be^(qt) + c
-    __global__  void    doubleExp_  (float* A, float a, float b, float c, float k, float q, int N);
-    __host__    void    doubleExp   (float* A, float* param, int N);
+    __global__  void    fdoubleExp_  (float* A, float a, float b, float c, float k, float q, int N);
+    __host__    void    fdoubleExp   (float* A, float* param, int N);
+
+    __global__  void    fexp_  (float* A, float a, float b, float k, int N);
+    __host__    void    fexp   (float* A, float* param, int N);
 
     //Return: at + b
-    __global__  void    linear_     (float* A, float a, float b, int N);
-    __host__    void    linear      (float* A, float* param, int N);
+    __global__  void    flinear_     (float* A, float a, float b, int N);
+    __host__    void    flinear      (float* A, float* param, int N);
 
     //Returns coef matrix with first column being t_n and second column constant
     __global__  void    lincoef_    (float* A, int N);

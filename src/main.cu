@@ -3,6 +3,7 @@
 #include <iostream>   
 #include <iomanip>
 #include <cmath>
+#include <unistd.h>
 
 #include "vector_wrappers.h"
 #include "matrix_wrappers.h"
@@ -85,7 +86,7 @@ namespace fit{
     //Gauss-Newton method
     __host__ void gaussNewton(float* A, float* param, void f(float* A, float* param, int N), int N, int K){
 
-        float eps = 0.05;
+        float eps = 0.1;
 
         //Finding inverse of Jacobian
         float* J;       gpuErrchk(cudaMalloc(&J, N * K * sizeof(float)));
@@ -98,9 +99,10 @@ namespace fit{
             count++;
             //J^-1
             jacobian_v2(J, f, param, N, K);
-            pInv(J, J, N, K);
+            pInvSVD(J, J, N, K);
+            
             //(y - f(param))
-            doubleExp(F, param, N);
+            f(F, param, N);
             vector::sub(A, F, F, N);
             
             //J^-1(y - f(param))
@@ -119,7 +121,7 @@ namespace fit{
             //print(param, 1, K);
             //std::cout << "Error:" << error << '\n';
 
-        }while(error > 0.001);
+        }while(error > 0.01);
         
         std::cout << "Converged in " << count << " iterations\n";
         if (J)  cudaFree(J);
@@ -176,21 +178,20 @@ namespace fit{
         
         //Linearize
         vector::log(DY, DY, N-2);
-
         //Fit exponential part
         lincoef(X, N-2);
         fastLinear(DY, X, a, N-2, 2);
         gpuErrchk(cudaMemcpy(param, a, 2 * sizeof(float), cudaMemcpyDeviceToHost));
-        
         //Account for offset from numerical derivative
         param[1] -= param[0];
 
         //Rescaling constants for evaluating fit
         float temp = exp(param[1])/(-2*param[0]);
         param[1] = param[1] - log(abs(2 * param[0]));
+        param[3] = 0;
         
         //Evaluating exponential fit
-        linear(fit, param, N);
+        flinear(fit, param, N);
         vector::exp(fit, fit, N);
         
         //Subtracting off fit to get constant offset
@@ -199,11 +200,14 @@ namespace fit{
 
         //Create output
         param[1] = temp;
+
+        if(DY)  cudaFree(DY);
+        if(X)   cudaFree(X);
+        if(a)   cudaFree(a);
+        if(fit) cudaFree(fit);
     }
-
+    
 }
-
-
 
 void TestMult(){
     int M = 4;
@@ -281,7 +285,7 @@ void TestSvd(){
 }
 
 void testLinFit(){
-    int N = 10000;
+    int N = 5000;
     size_t size = N * sizeof(float);
     float* voltage = (float*)malloc(size);
     float* d_voltage;   gpuErrchk(cudaMalloc(&d_voltage, size));
@@ -297,18 +301,29 @@ void testLinFit(){
         voltage[i] = voltage[i-1] - 0.5;
     cudaMemcpy(d_voltage, voltage, size, cudaMemcpyHostToDevice);
 
+    std::cout << "\n\nFitting linear (2 parameter linear fit).\nV = at + b\nExpected Parameters:\n-0.5, 100 \n";
+    std::cout << "Result: \n";
+
+    cudaDeviceSynchronize();
     cudaEventRecord(start);
-    fit::lincoef(X, N);
-    fit::robustLinear(d_voltage, X, a, N, 2);
+    for (int i = 0; i < 100; i++){
+        fit::lincoef(X, N);
+        fit::robustLinear(d_voltage, X, a, N, 2);
+    }
+    cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
     std::cout << milliseconds << "ms elapsed.\n";
     print_(a, 1, 2);
     
+    cudaDeviceSynchronize();
     cudaEventRecord(start);
-    fit::lincoef(X, N);
-    fit::fastLinear(d_voltage, X, a, N, 2);
+    for (int i = 0; i < 100; i++){
+        fit::lincoef(X, N);
+        fit::fastLinear(d_voltage, X, a, N, 2);
+    }
+    cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
@@ -324,11 +339,12 @@ void testLinFit(){
 }
 
 void testExpFit(){
-    int N = 10000;
+    int N = 5000;
     size_t size = N * sizeof(float);
     float* voltage = (float*)malloc(size);
+    float* param = (float*)malloc(3 * sizeof(float));
     float* d_voltage;   gpuErrchk(cudaMalloc(&d_voltage, size));
-    float* X;           gpuErrchk(cudaMalloc(&X, N * 2 * sizeof(float)));
+    float* X;           gpuErrchk(cudaMalloc(&X, size * 2));
     float* a;           gpuErrchk(cudaMalloc(&a, 2 * sizeof(float)));
     float milliseconds = 0;
     cudaEvent_t start, stop;
@@ -338,11 +354,19 @@ void testExpFit(){
     voltage[0] = 100;
     for (int i = 1; i < N; i++)
         voltage[i] = voltage[i-1] * 0.999;
+    for (int i = 1; i < N; i++)
+        voltage[i] += .01;
+
     cudaMemcpy(d_voltage, voltage, size, cudaMemcpyHostToDevice);
-    float* param = (float*)malloc(3 * sizeof(float));
     
+    std::cout << "\n\nFitting Exponential (3 parameter linear fit).\nV = at + b\nExpected Parameters:\n-0.00010005, 100, 0.01\n";
+    std::cout << "Result: \n";
+
+    cudaDeviceSynchronize();
     cudaEventRecord(start);
-    fit::fastExpOffset(d_voltage, param, N);
+    for (int i = 0; i < 100; i++)
+        fit::fastExpOffset(d_voltage, param, N);
+    cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
@@ -351,9 +375,14 @@ void testExpFit(){
 
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
+    if(d_voltage)   cudaFree(d_voltage);
+    if(X)           cudaFree(X);
+    if(a)           cudaFree(a);
+    if(voltage)     free(voltage);
+    if(param)       free(param);
 }
 
-int main(){
+void testGaussNewtonFit(){
     int N = 5000;
     size_t size = N * sizeof(float);
     float T = 1e-9;
@@ -361,56 +390,122 @@ int main(){
     float* d_voltage;   gpuErrchk(cudaMalloc(&d_voltage, size));
     float* d_fit;       gpuErrchk(cudaMalloc(&d_fit, size));
     float milliseconds = 0;
+    int failed;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    // voltage[0] = 0;
-    // for (int i = 1; i < N; i++){
-    //     voltage[i] = voltage[i-1] * 0.99998000019999866667;
-    //     if(rand()%10000 == 0)
-    //         voltage[i] += 1;
-    // }
-
     voltage[0] = 100;
-    
+    for (int i = 1; i < N; i++)
+        voltage[i] = voltage[i-1] * .999;
     for (int i = 1; i < N; i++){
-        voltage[i] = voltage[i-1] * .99998;
+        voltage[i] -= exp(-0.01 * i) + 0.01;
     }
-
     cudaMemcpy(d_voltage, voltage, size, cudaMemcpyHostToDevice);
 
-    //Fitting V = ae^(kt) + be^(qt) + c
-    //param: {a, b, c, k, q}
+    float param[5];
    
-    float param[5] = {
-        1,
-        -1,
-        1,
-        -1 * 1e-3,
-        -10 * 1e-3
-    };
+    srand (time(NULL));
+
+    failed = 0;
     std::cout << "\n\n\nFitting double exponential (5 parameter non-linear fit).\nV = ae^(kt) + be^(qt) + c\n"; 
+    cudaDeviceSynchronize();
     cudaEventRecord(start);
-    fit::gaussNewton(d_voltage, param, fit::doubleExp, N, 5);
+    for (int i = 0; i < 10; i++){
+        param[0] = rand() % 10000; // From 1 to 1e4
+        param[1] = (-rand() % 10000) * 1e-2; // From -1e-2 to -1e2
+        param[2] = rand()%1001 - 500; // From -1e2 to 1e2
+        param[3] = -rand()%10000 * 1e-5; // From 1e-5 to 0.1
+        param[4] = -rand()%10000 * 1e-3; // From 1e-3 to 10
+        fit::gaussNewton(d_voltage, param, fit::fdoubleExp, N, 5);
+        for (int j = 0; j < 5; j++)
+            if (isnan(param[j]) || isinf(param[j])){
+                failed += 1;
+                break;
+            }
+    }
+    cudaDeviceSynchronize();
     cudaEventRecord(stop);
-    fit::doubleExp(d_fit, param, N);
+    cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
-    
     std::cout << milliseconds << "ms elapsed." << "\n";
-    //print_(d_fit, N, 1);
-    //print_(d_voltage, N, 1);
-    std::cout << "Expected parameters:\n 100, 0, 0, -0.00002, <undefined>\n";
+    std::cout << "Failed " << failed << " times\n";
+    std::cout << "Expected parameters:\n 100, -1, -0.01, -0.0010005, -0.01\n";
     std::cout << "Result: \n";
     print(param, 1, 5);
-    
-    //TestMult();
-    //TestSvd();
-    //TestInv();
-    std::cout << "\n\nFitting linear (2 parameter linear fit).\nV = at + b\nExpected Parameters:\n-0.5, 100 \n";
+
+
+
+    voltage[0] = 100;
+    for (int i = 1; i < N; i++)
+        voltage[i] = voltage[i-1] * .999;
+    for (int i = 1; i < N; i++)
+        voltage[i] -= 0.01;
+
+    failed = 0;
+    std::cout << "\n\n\nFitting exponential (3 parameter non-linear fit).\nV = ae^(kt) + c\n"; 
+    cudaDeviceSynchronize();
+    cudaEventRecord(start);
+    for (int i = 0; i < 10; i++){
+        param[0] = rand() % 10000 + 1; // From 1 to 10000
+        param[1] = rand()%1001 - 500; // From -500 to 500
+        param[2] = -rand()%10000 * 1e-5; // From 1e-5 to 0.1
+        fit::gaussNewton(d_voltage, param, fit::fexp, N, 3);
+        for (int j = 0; j < 3; j++)
+            if (isnan(param[j]) || isinf(param[j])){
+                failed += 1;
+                break;
+            }
+    }
+    cudaDeviceSynchronize();
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << milliseconds << "ms elapsed." << "\n";
+    std::cout << "Failed " << failed << " times\n";
+    std::cout << "Expected parameters:\n 100, -0.01, -0.0010005\n";
     std::cout << "Result: \n";
-    testLinFit();
-    testExpFit();
+    print(param, 1, 3);
+
+
+
+    voltage[0] = 100;
+    for (int i = 1; i < N; i++)
+        voltage[i] = voltage[i-1] - 0.5;
+    cudaMemcpy(d_voltage, voltage, size, cudaMemcpyHostToDevice);
+
+    std::cout << "\n\n\nFitting linear (2 parameter non-linear fit).\nV = ax + b\n"; 
+    cudaDeviceSynchronize();
+    cudaEventRecord(start);
+    for (int i = 0; i < 10; i++){
+        param[0] = -0.5 * (rand() % 10000) * 1e-2;
+        param[1] = rand() % 10000 - 5000;
+        fit::gaussNewton(d_voltage, param, fit::flinear, N, 2);
+        for (int j = 0; j < 2; j++)
+            if (isnan(param[j]) || isinf(param[j])){
+                failed += 1;
+                break;
+            }
+    }
+    cudaDeviceSynchronize();
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    std::cout << milliseconds << "ms elapsed." << "\n";
+    std::cout << "Failed " << failed << " times\n";
+    std::cout << "Expected parameters:\n -0.5, 100,\n";
+    std::cout << "Result: \n";
+    print(param, 1, 2);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
     cudaFree(d_voltage);
     free(voltage);
+}
+
+int main(){
+
+    // testLinFit();
+    // testExpFit();
+    testGaussNewtonFit();
 }

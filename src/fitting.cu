@@ -3,26 +3,38 @@
 namespace fit{
 
     //Return: ae^(kt) + be^(qt) + c
-    __global__ void doubleExp_(float* A, float a, float b, float c, float k, float q, int N){
+    __global__ void fdoubleExp_(float* A, float a, float b, float c, float k, float q, int N){
         int i = blockDim.x * blockIdx.x + threadIdx.x;
         if (i < N)
             A[i] = a * expf(k * i) + b * expf(q * i) + c;
     }
-    __host__ void doubleExp(float* A, float* param, int N){
+    __host__ void fdoubleExp(float* A, float* param, int N){
         int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
-        doubleExp_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], param[2], -abs(param[3]), -abs(param[4]), N);
+        fdoubleExp_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], param[2], -abs(param[3]), -abs(param[4]), N);
+        gpuErrchk(cudaDeviceSynchronize());
+    }
+
+    //Return: ae^(kt) + b
+    __global__ void fexp_(float* A, float a, float b, float k, int N){
+        int i = blockDim.x * blockIdx.x + threadIdx.x;
+        if (i < N)
+            A[i] = a * expf(k * i) + b;
+    }
+    __host__ void fexp(float* A, float* param, int N){
+        int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+        fexp_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], -abs(param[2]), N);
         gpuErrchk(cudaDeviceSynchronize());
     }
 
     //Return: ax + b
-    __global__ void linear_(float* A, float a, float b, int N){
+    __global__ void flinear_(float* A, float a, float b, int N){
         int i = blockDim.x * blockIdx.x + threadIdx.x;
         if (i < N)
             A[i] = a * i + b;
     }
-    __host__ void linear(float* A, float* param, int N){
+    __host__ void flinear(float* A, float* param, int N){
         int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
-        linear_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], N);
+        flinear_<<<blocksPerGrid, threadsPerBlock>>>(A, param[0], param[1], N);
         gpuErrchk(cudaDeviceSynchronize());
     }
     
